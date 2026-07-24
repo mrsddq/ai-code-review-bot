@@ -1,0 +1,8 @@
+FROM python:3.12-slim
+WORKDIR /workspace
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-cache-dir .
+ENTRYPOINT ["reviewbot"]
+CMD ["."]
+
