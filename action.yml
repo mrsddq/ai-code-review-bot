@@ -1,5 +1,5 @@
 name: AI Code Review Bot
-description: Review Python source and upload a SARIF-compatible report
+description: Review Python source and write a SARIF-compatible report
 inputs:
   path:
     description: File or directory to review
@@ -9,7 +9,9 @@ runs:
   using: composite
   steps:
     - shell: bash
-      run: pip install "${{ github.action_path }}"
+      run: pip install "$GITHUB_ACTION_PATH"
     - shell: bash
-      run: reviewbot "${{ inputs.path }}" --format sarif --output review.sarif --fail-on none
+      env:
+        REVIEW_PATH: ${{ inputs.path }}
+      run: reviewbot "$REVIEW_PATH" --format sarif --output review.sarif --fail-on none
 

@@ -6,9 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-SECRET_RE = re.compile(
-    r"(?i)(api[_-]?key|secret|token|password)\s*=\s*['\"]([^'\"]{8,})['\"]"
-)
+SECRET_NAME_RE = re.compile(r"(?:^|_)(?:api_?key|secret|token|password)(?:$|_)", re.I)
 SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2}
 
 
@@ -41,6 +39,22 @@ class ReviewVisitor(ast.NodeVisitor):
             column=getattr(node, "col_offset", 0) + 1,
             suggestion=suggestion,
         ))
+
+    def _review_secret_assignment(self, node: ast.AST, target: ast.expr, value: ast.expr | None) -> None:
+        if (isinstance(target, ast.Name) and SECRET_NAME_RE.search(target.id)
+                and isinstance(value, ast.Constant) and isinstance(value.value, str)
+                and len(value.value) >= 8):
+            self.add(node, "CRB006", "high", f"Possible hard-coded {target.id}.",
+                     "Load secrets from a secret manager or environment variable.")
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        for target in node.targets:
+            self._review_secret_assignment(node, target, node.value)
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        self._review_secret_assignment(node, node.target, node.value)
+        self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
         name = ""
@@ -110,25 +124,20 @@ def review_source(source: str, path: str = "<memory>") -> list[Finding]:
 
     visitor = ReviewVisitor(path)
     visitor.visit(tree)
-    for line_number, line in enumerate(source.splitlines(), 1):
-        match = SECRET_RE.search(line)
-        if match and not any(marker in line.lower() for marker in ("example", "dummy", "test", "<")):
-            visitor.findings.append(Finding(
-                rule="CRB006",
-                severity="high",
-                message=f"Possible hard-coded {match.group(1)}.",
-                path=path,
-                line=line_number,
-                column=match.start(1) + 1,
-                suggestion="Load secrets from a secret manager or environment variable.",
-            ))
     return sorted(visitor.findings, key=lambda item: (-SEVERITY_ORDER[item.severity], item.line))
 
 
 def review_path(path: Path) -> list[Finding]:
+    if not path.exists():
+        raise FileNotFoundError(f"Review path does not exist: {path}")
+    if path.is_symlink():
+        raise ValueError("Review path must not be a symlink")
     files = [path] if path.is_file() else [
         item for item in path.rglob("*.py")
-        if not any(part.startswith(".") or part in {"build", "dist"} for part in item.parts)
+        if not item.is_symlink() and not any(
+            part.startswith(".") or part in {"build", "dist"}
+            for part in item.relative_to(path).parts
+        )
     ]
     findings: list[Finding] = []
     for file_path in sorted(files):
@@ -136,7 +145,7 @@ def review_path(path: Path) -> list[Finding]:
             source = file_path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as exc:
             findings.append(Finding(
-                "CRB999", "low", f"Could not read file: {exc}", str(file_path), 1,
+                "CRB999", "high", f"Could not read file: {exc}", str(file_path), 1,
                 suggestion="Save the file as UTF-8 and check permissions.",
             ))
             continue

@@ -48,3 +48,19 @@ docker run --rm -v "$PWD:/workspace" reviewbot .
 ```
 
 MIT licensed.
+
+## Review contract and limitations
+
+This is a deterministic AST/rule baseline; despite the repository name, it does not call or train
+an AI model. It cannot prove code is secure and does not resolve data flow or imported aliases.
+Potential secret findings contain the variable name and location, never the literal value.
+Secret assignments use AST nodes, including annotations and multiline strings; comments cannot
+suppress a finding. Heuristic rules may still produce false positives.
+
+Missing paths are operational errors (CLI exit 2), unreadable Python files are high-severity
+`CRB999` findings, and symlink files are skipped rather than scanning outside the chosen tree.
+Explicit roots inside hidden parent directories are supported. Exit 1 means findings met the
+configured gate, and exit 0 means no finding met that gate, **not** that the code is vulnerability-free.
+The composite action only writes `review.sarif` and deliberately does not fail on findings or upload
+it; configure a separate gate/upload step if wanted. Its path input passes through an environment
+variable, not shell-script interpolation. Regression tests cover these failure modes offline.

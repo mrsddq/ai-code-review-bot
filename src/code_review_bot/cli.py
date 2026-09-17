@@ -15,7 +15,10 @@ def main() -> None:
     parser.add_argument("--fail-on", choices=("none", "low", "medium", "high"), default="high")
     args = parser.parse_args()
 
-    findings = review_path(args.path)
+    try:
+        findings = review_path(args.path)
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
     renderers = {"text": text_report, "json": json_report, "sarif": sarif_report}
     report = renderers[args.format](findings)
     if args.output:
