@@ -54,3 +54,9 @@ def test_unreadable_source_is_a_high_severity_finding(tmp_path):
     findings = review_path(path)
     assert findings[0].rule == "CRB999"
     assert json.loads(json_report(findings))["findings"][0]["severity"] == "high"
+
+
+@pytest.mark.parametrize("target", ["self.api_key", "settings.password", "accessToken", "databasePassword", "self.accessToken: str"])
+def test_attribute_and_camelcase_credentials_are_detected(target):
+    findings = review_source(f'{target} = "abcdefgh12345"\n')
+    assert any(item.rule == "CRB006" for item in findings)

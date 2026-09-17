@@ -41,10 +41,12 @@ class ReviewVisitor(ast.NodeVisitor):
         ))
 
     def _review_secret_assignment(self, node: ast.AST, target: ast.expr, value: ast.expr | None) -> None:
-        if (isinstance(target, ast.Name) and SECRET_NAME_RE.search(target.id)
+        name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else ""
+        normalized_name = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name)
+        if (SECRET_NAME_RE.search(normalized_name)
                 and isinstance(value, ast.Constant) and isinstance(value.value, str)
                 and len(value.value) >= 8):
-            self.add(node, "CRB006", "high", f"Possible hard-coded {target.id}.",
+            self.add(node, "CRB006", "high", f"Possible hard-coded {name}.",
                      "Load secrets from a secret manager or environment variable.")
 
     def visit_Assign(self, node: ast.Assign) -> None:
