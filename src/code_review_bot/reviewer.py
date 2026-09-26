@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import re
+import tokenize
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -144,11 +145,12 @@ def review_path(path: Path) -> list[Finding]:
     findings: list[Finding] = []
     for file_path in sorted(files):
         try:
-            source = file_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
+            with tokenize.open(file_path) as source_file:
+                source = source_file.read()
+        except (OSError, UnicodeError, SyntaxError) as exc:
             findings.append(Finding(
                 "CRB999", "high", f"Could not read file: {exc}", str(file_path), 1,
-                suggestion="Save the file as UTF-8 and check permissions.",
+                suggestion="Check the source encoding declaration and file permissions.",
             ))
             continue
         findings.extend(review_source(source, str(file_path)))

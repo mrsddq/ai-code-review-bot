@@ -60,3 +60,12 @@ def test_unreadable_source_is_a_high_severity_finding(tmp_path):
 def test_attribute_and_camelcase_credentials_are_detected(target):
     findings = review_source(f'{target} = "abcdefgh12345"\n')
     assert any(item.rule == "CRB006" for item in findings)
+@pytest.mark.parametrize("source", [
+    b"\xef\xbb\xbf# UTF-8 BOM\neval(value)\n",
+    b"# coding: latin-1\n# caf\xe9\neval(value)\n",
+])
+def test_review_honors_python_source_encoding(tmp_path, source):
+    path = tmp_path / "encoded.py"
+    path.write_bytes(source)
+    findings = review_path(path)
+    assert [finding.rule for finding in findings] == ["CRB001"]
